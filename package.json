@@ -1,17 +1,26 @@
 {
-"name": "battlebot",
-"version": "1.0.0",
-"main": "bot.js",
-
-"scripts": {
-"start": "pm2-runtime bot.js"
-},
-
-"dependencies": {
-"axios": "^1.10.0",
-"dotenv": "^17.0.0",
-"telegraf": "^4.16.3",
-"telegram": "^2.26.8",
-"pm2": "^6.0.8"
-}
+  "name": "maker-bot",
+  "version": "1.0.0",
+  "description": "Telegram Bot Marketplace & Auto Deploy System",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js",
+    "pm2": "pm2 start bot.js --name maker-bot",
+    "pm2:stop": "pm2 stop maker-bot",
+    "pm2:restart": "pm2 restart maker-bot",
+    "pm2:logs": "pm2 logs maker-bot"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "MAKER BOT",
+  "license": "MIT"
 }
