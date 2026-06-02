@@ -1,26 +1,19 @@
 {
-  "name": "maker-bot",
+  "name": "ovoz-battle-miniapp",
   "version": "1.0.0",
-  "description": "Telegram Bot Marketplace & Auto Deploy System",
+  "description": "Telegram Ovoz Battle Mini App",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "dev": "nodemon bot.js",
-    "pm2": "pm2 start bot.js --name maker-bot",
-    "pm2:stop": "pm2 stop maker-bot",
-    "pm2:restart": "pm2 restart maker-bot",
-    "pm2:logs": "pm2 logs maker-bot"
+    "dev": "node --watch bot.js"
   },
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "telegraf": "^4.16.3"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "author": "MAKER BOT",
-  "license": "MIT"
+  }
 }
