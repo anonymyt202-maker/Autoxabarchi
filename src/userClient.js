@@ -5,6 +5,12 @@ const { NewMessage, EditedMessage, DeletedMessage } = require("telegram/events")
 const config = require("./config");
 const store = require("./store");
 
+function createTelegramClient(sessionString) {
+  return new TelegramClient(new StringSession(sessionString), config.apiId, config.apiHash, {
+    connectionRetries: 5,
+  });
+}
+
 // ⚠️ Bu yerda hech qachon terminal (stdin/"input" paketi) ishlatilmaydi!
 // Sabab: hosting/deploy muhitlarida interaktiv konsol bo'lmaydi va bot
 // "kod kiriting" deb kutib qolib, deploy xato beradi yoki jarayon osilib qoladi.
@@ -12,12 +18,8 @@ const store = require("./store");
 
 async function createUserClient({ askOwner, notifyOwner, waitForOwnerReady }) {
   // 1️⃣ Avval mavjud sessiyani tekshiramiz: env (SESSION_STRING) > data/session.txt
-  const existingSession = config.sessionString || store.loadSession();
-  const stringSession = new StringSession(existingSession);
-
-  const client = new TelegramClient(stringSession, config.apiId, config.apiHash, {
-    connectionRetries: 5,
-  });
+  let existingSession = config.sessionString || store.loadSession();
+  let client = createTelegramClient(existingSession);
 
   if (existingSession) {
     console.log("🔐 Saqlangan sessiya topildi, login so'ramasdan ulanmoqda...");
@@ -31,6 +33,11 @@ async function createUserClient({ askOwner, notifyOwner, waitForOwnerReady }) {
       }
     } catch (err) {
       console.log("⚠️ Saqlangan sessiya yaroqsiz ekan, qaytadan login qilish kerak bo'ladi:", err.message);
+      try {
+        store.saveSession("");
+      } catch (_) {}
+      existingSession = "";
+      client = createTelegramClient("");
     }
   }
 
@@ -44,12 +51,33 @@ async function createUserClient({ askOwner, notifyOwner, waitForOwnerReady }) {
     "🔐 <b>Akkauntga ulanish boshlandi!</b>\n\nQuyidagi savollarga shaxsiy akkauntingiz ma'lumotlari bilan javob bering 👇"
   );
 
-  await client.start({
-    phoneNumber: async () => await askOwner("📱 Telefon raqamingizni yuboring (masalan: +998901234567):"),
-    phoneCode: async () => await askOwner("✉️ Telegramdan SMS/xabar orqali kelgan kodni yuboring:"),
-    password: async () => await askOwner("🔑 Akkauntingizning ikki bosqichli (2FA) parolini yuboring:"),
-    onError: (err) => console.log("⚠️ Login xatoligi:", err.message || err),
-  });
+  const safeStart = async () => {
+    await client.start({
+      phoneNumber: async () => await askOwner("📱 Telefon raqamingizni yuboring (masalan: +998901234567):"),
+      phoneCode: async () => await askOwner("✉️ Telegramdan SMS/xabar orqali kelgan kodni yuboring:"),
+      password: async () => await askOwner("🔑 Akkauntingizning ikki bosqichli (2FA) parolini yuboring:"),
+      onError: (err) => console.log("⚠️ Login xatoligi:", err.message || err),
+    });
+  };
+
+  try {
+    await safeStart();
+  } catch (err) {
+    const msg = String(err?.message || err);
+    console.log("❌ Login jarayonida xatolik:", msg);
+
+    // Stale/yarim sessiya qolib ketgan bo'lsa, uni tozalab qayta urinib ko'ramiz.
+    if (msg.toLowerCase().includes("session") || msg.toLowerCase().includes("auth")) {
+      try {
+        store.saveSession("");
+      } catch (_) {}
+      client = createTelegramClient("");
+      await notifyOwner("⚠️ Oldingi sessiya yaroqsiz edi. Login qayta boshlandi — telefon raqam/kodni qayta yuboring.");
+      await safeStart();
+    } else {
+      throw err;
+    }
+  }
 
   const sessionString = client.session.save();
   store.saveSession(sessionString);

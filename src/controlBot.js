@@ -20,8 +20,9 @@ function createControlBot() {
   // chatId -> "reply_text" | "reaction_emoji"  (matn kutilayotgan amallar)
   const pending = {};
 
-  // 🔐 Login oqimi uchun: navbatdagi xabarni kutayotgan promise resolve funksiyasi
-  let loginResolver = null;
+  // Login oqimi uchun bitta faol so'rovni ushlab turamiz.
+  // Bu noto'g'ri joyga ketib qolgan javoblar va promptlar "aralashib" ketishini kamaytiradi.
+  let loginRequest = null;
   const ownerEvents = new EventEmitter();
 
   function isOwner(fromUser) {
@@ -97,6 +98,10 @@ function createControlBot() {
     );
   }
 
+  function clearLoginRequest() {
+    loginRequest = null;
+  }
+
   // ------------------------------------------------------------------
   // /start
   // ------------------------------------------------------------------
@@ -107,7 +112,7 @@ function createControlBot() {
     const firstTime = !store.getSettings().ownerChatId;
     if (firstTime) {
       store.saveSettings({ ownerChatId: msg.from.id });
-      ownerEvents.emit("owner_ready"); // 🔐 login oqimi shu yerda kutib turgan bo'lishi mumkin
+      ownerEvents.emit("owner_ready");
     }
     await bot.sendMessage(
       msg.chat.id,
@@ -134,7 +139,7 @@ function createControlBot() {
       if (data === "toggle_mode") {
         const newMode = settings.mode === "online" ? "offline" : "online";
         store.saveSettings({ mode: newMode });
-        if (newMode === "offline") store.resetAllCycles(); // 🔄 yangi offline sikli boshlanadi
+        if (newMode === "offline") store.resetAllCycles();
         await bot.editMessageText(
           `✅ Rejim o'zgartirildi: ${newMode === "online" ? "🟢 Online" : "🔴 Offline"}\n\n📋 Asosiy menyu:`,
           { chat_id: chatId, message_id: messageId, ...mainMenu() }
@@ -207,22 +212,21 @@ function createControlBot() {
   });
 
   // ------------------------------------------------------------------
-  // Owner'dan kutilayotgan matnli javoblar (yangi avto-javob / reaksiya)
+  // Owner'dan kutilayotgan matnli javoblar (login / sozlamalar)
   // ------------------------------------------------------------------
   bot.on("message", async (msg) => {
     if (!msg.text || msg.text.startsWith("/")) return;
     if (!isOwner(msg.from)) return;
 
-    // 1️⃣ Agar login oqimi (telefon/kod/parol) navbatdagi javobni kutayotgan bo'lsa,
-    //    bu xabar ENG BIRINCHI navbatda o'shanga yuboriladi.
-    if (loginResolver) {
-      const resolve = loginResolver;
-      loginResolver = null;
+    // 1️⃣ Login oqimi uchun so'ralgan navbatdagi javob
+    if (loginRequest) {
+      const resolve = loginRequest.resolve;
+      clearLoginRequest();
       resolve(msg.text.trim());
       return;
     }
 
-    // 2️⃣ Aks holda — oddiy sozlama kutuvlari (avto-javob matni / reaksiya emoji)
+    // 2️⃣ Oddiy sozlama kutuvlari
     const state = pending[msg.from.id];
     if (!state) return;
 
@@ -256,8 +260,6 @@ function createControlBot() {
     }
   }
 
-  // 🔐 Login oqimi uchun: savol yuboradi va owner'dan keladigan keyingi
-  // matnli javobni Promise sifatida qaytaradi (terminal/stdin HECH QACHON ishlatilmaydi).
   function askOwner(promptText) {
     return new Promise((resolve, reject) => {
       const settings = store.getSettings();
@@ -265,12 +267,20 @@ function createControlBot() {
         reject(new Error("Owner hali botga /start bosmagan"));
         return;
       }
-      loginResolver = resolve;
-      bot.sendMessage(settings.ownerChatId, promptText, { parse_mode: "HTML" }).catch(reject);
+
+      if (loginRequest) {
+        reject(new Error("Login so'rovi allaqachon faol. Avvalgi prompt yakunlanishini kuting."));
+        return;
+      }
+
+      loginRequest = { resolve, promptText, startedAt: Date.now() };
+      bot.sendMessage(settings.ownerChatId, promptText, { parse_mode: "HTML" }).catch((err) => {
+        clearLoginRequest();
+        reject(err);
+      });
     });
   }
 
-  // Owner kamida bir marta /start bosguncha kutadi (login boshlanishi uchun shart)
   function waitForOwnerReady() {
     return new Promise((resolve) => {
       if (store.getSettings().ownerChatId) return resolve();
