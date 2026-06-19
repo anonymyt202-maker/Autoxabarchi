@@ -1,0 +1,21 @@
+{
+  "name": "telegram-autoreply-userbot",
+  "version": "1.0.0",
+  "description": "🤖 Telegram shaxsiy akkaunt uchun avto-javob, online/offline rejim, xabar tahrirlash/o'chirishni kuzatish va avto-reaksiya tizimi",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "setup": "bash setup.sh"
+  },
+  "dependencies": {
+    "telegram": "^2.18.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
