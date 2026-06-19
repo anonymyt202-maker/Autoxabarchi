@@ -214,15 +214,64 @@ function createControlBot() {
   // ------------------------------------------------------------------
   // Owner'dan kutilayotgan matnli javoblar (login / sozlamalar)
   // ------------------------------------------------------------------
+  function normalizePhoneNumber(input) {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+
+    // bo'sh joy, chiziqcha, qavs va boshqa belgilarni olib tashlaymiz
+    let cleaned = raw.replace(/[\s\-().]/g, "");
+
+    // +998..., 998..., 00..., 901234567 kabi yozuvlarni imkon qadar bitta ko'rinishga keltiramiz
+    if (cleaned.startsWith("00")) cleaned = `+${cleaned.slice(2)}`;
+    if (!cleaned.startsWith("+")) cleaned = `+${cleaned}`;
+
+    // Agar foydalanuvchi +998501907814 yoki 998501907814 kiritsa shu holatni qabul qilamiz
+    if (/^\+998\d{9}$/.test(cleaned)) return cleaned;
+
+    // Agar raqam faqat digit bo'lsa va xalqaro formatga o'xshasa ham qabul qilamiz
+    if (/^\+\d{7,15}$/.test(cleaned)) return cleaned;
+
+    return "";
+  }
+
   bot.on("message", async (msg) => {
     if (!msg.text || msg.text.startsWith("/")) return;
     if (!isOwner(msg.from)) return;
 
     // 1️⃣ Login oqimi uchun so'ralgan navbatdagi javob
     if (loginRequest) {
+      const answer = msg.text.trim();
+
+      if (loginRequest.kind === "phone") {
+        const phone = normalizePhoneNumber(answer);
+        if (!phone) {
+          await bot.sendMessage(
+            msg.chat.id,
+            "⚠️ Telefon raqami noto'g'ri formatda. Masalan: +998901234567\nBo'sh joy va belgilarni ishlatmasdan qayta yuboring."
+          );
+          return;
+        }
+        const resolve = loginRequest.resolve;
+        clearLoginRequest();
+        resolve(phone);
+        return;
+      }
+
+      if (loginRequest.kind === "code") {
+        const code = answer.replace(/\s+/g, "");
+        if (!/^\d{3,8}$/.test(code)) {
+          await bot.sendMessage(msg.chat.id, "⚠️ Kod faqat raqamlardan iborat bo'lishi kerak. Qayta yuboring.");
+          return;
+        }
+        const resolve = loginRequest.resolve;
+        clearLoginRequest();
+        resolve(code);
+        return;
+      }
+
       const resolve = loginRequest.resolve;
       clearLoginRequest();
-      resolve(msg.text.trim());
+      resolve(answer);
       return;
     }
 
@@ -273,7 +322,16 @@ function createControlBot() {
         return;
       }
 
-      loginRequest = { resolve, promptText, startedAt: Date.now() };
+      const promptLower = String(promptText || "").toLowerCase();
+      const kind = promptLower.includes("telefon")
+        ? "phone"
+        : promptLower.includes("kod")
+          ? "code"
+          : promptLower.includes("parol") || promptLower.includes("password")
+            ? "password"
+            : "text";
+
+      loginRequest = { resolve, promptText, kind, startedAt: Date.now() };
       bot.sendMessage(settings.ownerChatId, promptText, { parse_mode: "HTML" }).catch((err) => {
         clearLoginRequest();
         reject(err);
